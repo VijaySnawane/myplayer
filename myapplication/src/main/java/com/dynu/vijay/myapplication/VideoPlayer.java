@@ -1,5 +1,6 @@
 package com.dynu.vijay.myapplication;
 
+import android.app.Dialog;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.media.AudioManager;
@@ -9,6 +10,7 @@ import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,6 +21,7 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -82,6 +85,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     protected static Timer UPDATE_PROGRESS_TIMER;
     public ImageView startButton;
     public SeekBar progressBar;
+    public ProgressBar progress;
     public ImageView fullscreenButton;
     public TextView currentTimeTextView, totalTimeTextView;
     public ViewGroup textureViewContainer;
@@ -91,7 +95,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     public boolean loop = false;
     public Map<String, String> headData;
     public String url = "";
-    public Object[] objects = null;
+    public Object[] objects1 = null;
     protected int mScreenWidth;
     protected int mScreenHeight;
     protected AudioManager mAudioManager;
@@ -178,6 +182,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         View.inflate(context, R.layout.jc_layout_standard, this);
         startButton = (ImageView) findViewById(R.id.start);
         fullscreenButton = (ImageView) findViewById(R.id.fullscreen);
+        progress = (ProgressBar) findViewById(R.id.progress);
         progressBar = (SeekBar) findViewById(R.id.bottom_seek_progress);
         currentTimeTextView = (TextView) findViewById(R.id.current);
         totalTimeTextView = (TextView) findViewById(R.id.total);
@@ -250,14 +255,20 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     }
 
     public void PauseMediaPlayer() {
-        MediaManager.instance().mediaPlayer.pause();
-        setUiWitStateAndScreen(CURRENT_STATE_PAUSE);
-        mediaPlaying = false;
-        startButton.setImageResource(R.drawable.jc_play_normal);
+        if (MediaManager.instance() != null && MediaManager.instance().mediaPlayer != null) {
+            MediaManager.instance().mediaPlayer.pause();
+            setUiWitStateAndScreen(CURRENT_STATE_PAUSE);
+            mediaPlaying = false;
+            if (startButton != null) {
+                startButton.setImageResource(R.drawable.jc_play_normal);
+            }
+        }
+
     }
 
     public void setPlayImage() {
-        startButton.setImageResource(R.drawable.jc_play_normal);
+        if (startButton != null)
+            startButton.setImageResource(R.drawable.jc_play_normal);
     }
 
     public void clearFloatScreen() {
@@ -285,6 +296,18 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         startProgressTimer();
     }
 
+
+    public void showProgress()
+    {
+        progress.setVisibility(View.VISIBLE);
+        progress.bringToFront();
+    }
+
+    public void hideProgress()
+    {
+        progress.setVisibility(View.GONE);
+    }
+
     public void startWindowFullscreen() {
         Log.i(TAG, "startWindowFullscreen " + " [" + this.hashCode() + "] ");
         hideSupportActionBar(getContext());
@@ -305,7 +328,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
             LayoutParams lp = new LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             vp.addView(jcVideoPlayer, lp);
-            jcVideoPlayer.setUp(url, SCREEN_WINDOW_FULLSCREEN, objects);
+            jcVideoPlayer.setUp(url, SCREEN_WINDOW_FULLSCREEN);
             jcVideoPlayer.setUiWitStateAndScreen(currentState);
             jcVideoPlayer.addTextureView();
             VideoPlayerManager.setSecondFloor(jcVideoPlayer);
@@ -356,12 +379,11 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
 
     }
 
-    public void setUp(String url, int screen, Object... objects) {
+    public void setUp(String url, int screen) {
         if (!TextUtils.isEmpty(this.url) && TextUtils.equals(this.url, url)) {
             return;
         }
         this.url = url;
-        this.objects = objects;
         this.currentScreen = screen;
         this.headData = null;
         setUiWitStateAndScreen(CURRENT_STATE_NORMAL);
@@ -479,6 +501,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     @Override
     public void onStartTrackingTouch(SeekBar seekBar) {
         Log.i(TAG, "bottomProgress onStartTrackingTouch [" + this.hashCode() + "] ");
+        showProgress();
         cancelProgressTimer();
         ViewParent vpdown = getParent();
         while (vpdown != null) {
@@ -566,5 +589,4 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
             }
         }
     }
-
 }

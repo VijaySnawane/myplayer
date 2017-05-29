@@ -62,6 +62,7 @@ public class MediaManager implements TextureView.SurfaceTextureListener, MediaPl
             public void run() {
                 if (VideoPlayerManager.getCurrentJcvd() != null) {
                     VideoPlayerManager.getCurrentJcvd().onPrepared();
+                    VideoPlayerManager.getCurrentJcvd().hideProgress();
                 }
             }
         });
@@ -81,6 +82,14 @@ public class MediaManager implements TextureView.SurfaceTextureListener, MediaPl
     @Override
     public void onSeekComplete(MediaPlayer mediaPlayer) {
         mediaPlaying = true;
+        mainThreadHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (VideoPlayerManager.getCurrentJcvd() != null) {
+                    VideoPlayerManager.getCurrentJcvd().hideProgress();
+                }
+            }
+        });
     }
 
     @Override
@@ -122,6 +131,7 @@ public class MediaManager implements TextureView.SurfaceTextureListener, MediaPl
         if (savedSurfaceTexture == null) {
             savedSurfaceTexture = surfaceTexture;
             prepare();
+            VideoPlayerManager.getCurrentJcvd().showProgress();
         } else {
             textureView.setSurfaceTexture(savedSurfaceTexture);
         }
