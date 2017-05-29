@@ -1,6 +1,5 @@
 package com.dynu.vijay.myapplication;
 
-import android.app.Dialog;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.media.AudioManager;
@@ -10,7 +9,6 @@ import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Gravity;
-import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -297,15 +295,19 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     }
 
 
-    public void showProgress()
-    {
+    public void showProgress() {
         progress.setVisibility(View.VISIBLE);
         progress.bringToFront();
+        startButton.setEnabled(false);
+        //progressBar.setEnabled(false);
+        fullscreenButton.setEnabled(false);
     }
 
-    public void hideProgress()
-    {
+    public void hideProgress() {
         progress.setVisibility(View.GONE);
+        startButton.setEnabled(true);
+        //progressBar.setEnabled(true);
+        fullscreenButton.setEnabled(true);
     }
 
     public void startWindowFullscreen() {
