@@ -3,7 +3,9 @@ package com.dynu.vijay.myapplication;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.os.Handler;
+import android.support.v4.app.Fragment;
 import android.support.v7.app.ActionBar;
 import android.text.TextUtils;
 import android.util.AttributeSet;
@@ -30,7 +32,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import static android.content.ContentValues.TAG;
-import static com.dynu.vijay.myapplication.MediaManager.mediaPlaying;
+import static com.dynu.vijay.myapplication.MyFragment2.CURRENT_PLAYING_URL;
+import static com.dynu.vijay.myapplication.MyFragment2.CURRENT_PLING_LOOP;
+import static com.dynu.vijay.myapplication.MyFragment2.MAP_HEADER_DATA;
+import static com.dynu.vijay.myapplication.MyFragment2.mediaPlaying;
 
 
 public class VideoPlayer extends FrameLayout implements View.OnClickListener, SeekBar.OnSeekBarChangeListener, View.OnTouchListener {
@@ -53,7 +58,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     public static boolean TOOL_BAR_EXIST = true;
     public static int FULLSCREEN_ORIENTATION = ActivityInfo.SCREEN_ORIENTATION_SENSOR;
     public static int NORMAL_ORIENTATION = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
-    public static AudioManager.OnAudioFocusChangeListener onAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
+    public AudioManager.OnAudioFocusChangeListener onAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
         @Override
         public void onAudioFocusChange(int focusChange) {
             switch (focusChange) {
@@ -65,9 +70,9 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
                     break;
                 case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
                     try {
-                        if (MediaManager.instance().mediaPlayer != null &&
-                                MediaManager.instance().mediaPlayer.isPlaying()) {
-                            MediaManager.instance().mediaPlayer.pause();
+                        if (mAccessMediaPlayer.getMediaPlayer() != null &&
+                                mAccessMediaPlayer.getMediaPlayer().isPlaying()) {
+                            mAccessMediaPlayer.getMediaPlayer().pause();
                             mediaPlaying = false;
                         }
                     } catch (IllegalStateException e) {
@@ -81,6 +86,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         }
     };
     protected static Timer UPDATE_PROGRESS_TIMER;
+    public AccessMediaPlayer mAccessMediaPlayer;
     public ImageView startButton;
     public SeekBar progressBar;
     public ProgressBar progress;
@@ -103,24 +109,26 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
 
     public VideoPlayer(Context context) {
         super(context);
+        mAccessMediaPlayer=(AccessMediaPlayer)context;
         init(context);
     }
 
 
     public VideoPlayer(Context context, AttributeSet attrs) {
         super(context, attrs);
+        mAccessMediaPlayer=(AccessMediaPlayer)context;
         init(context);
     }
 
-    public static void releaseAllVideos() {
+    public void releaseAllVideos() {
         if ((System.currentTimeMillis() - CLICK_QUIT_FULLSCREEN_TIME) > FULL_SCREEN_NORMAL_DELAY) {
             Log.d(TAG, "releaseAllVideos");
             VideoPlayerManager.completeAll();
-            MediaManager.instance().releaseMediaPlayer();
+            mAccessMediaPlayer.getContextFragment().releaseMediaPlayer();
         }
     }
 
-    public static boolean backPress() {
+    public boolean backPress() {
         Log.i(TAG, "backPress");
         if ((System.currentTimeMillis() - CLICK_QUIT_FULLSCREEN_TIME) < FULL_SCREEN_NORMAL_DELAY)
             return false;
@@ -128,7 +136,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
             CLICK_QUIT_FULLSCREEN_TIME = System.currentTimeMillis();
             VideoPlayer jcVideoPlayer = VideoPlayerManager.getSecondFloor();
             Log.i("", "");
-            if (MediaManager.mediaPlaying) {
+            if (MyFragment2.mediaPlaying) {
                 VideoPlayerManager.getFirstFloor().startButton.setImageResource(R.drawable.jc_pause_normal);
             } else {
                 VideoPlayerManager.getFirstFloor().startButton.setImageResource(R.drawable.jc_play_normal);
@@ -142,7 +150,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
             CLICK_QUIT_FULLSCREEN_TIME = System.currentTimeMillis();
             VideoPlayerManager.getCurrentJcvd().currentState = CURRENT_STATE_NORMAL;
             VideoPlayerManager.getFirstFloor().clearFloatScreen();
-            MediaManager.instance().releaseMediaPlayer();
+            mAccessMediaPlayer.getContextFragment().releaseMediaPlayer();
             VideoPlayerManager.setFirstFloor(null);
             return true;
         }
@@ -226,12 +234,12 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
                 prepareMediaPlayer();
                 setUiWitStateAndScreen(CURRENT_STATE_PLAYING);
             } else if (currentState == CURRENT_STATE_PLAYING) {
-                MediaManager.instance().mediaPlayer.pause();
+                mAccessMediaPlayer.getMediaPlayer().pause();
                 setUiWitStateAndScreen(CURRENT_STATE_PAUSE);
                 startButton.setImageResource(R.drawable.jc_play_normal);
                 mediaPlaying = false;
             } else if (currentState == CURRENT_STATE_PAUSE) {
-                MediaManager.instance().mediaPlayer.start();
+                mAccessMediaPlayer.getMediaPlayer().start();
                 mediaPlaying = true;
                 setUiWitStateAndScreen(CURRENT_STATE_PLAYING);
                 startButton.setImageResource(R.drawable.jc_pause_normal);
@@ -253,8 +261,8 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     }
 
     public void PauseMediaPlayer() {
-        if (MediaManager.instance() != null && MediaManager.instance().mediaPlayer != null) {
-            MediaManager.instance().mediaPlayer.pause();
+        if (mAccessMediaPlayer.getContextFragment()!= null && mAccessMediaPlayer.getMediaPlayer() != null) {
+            mAccessMediaPlayer.getMediaPlayer().pause();
             setUiWitStateAndScreen(CURRENT_STATE_PAUSE);
             mediaPlaying = false;
             if (startButton != null) {
@@ -273,7 +281,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         JCUtils.getAppCompActivity(getContext()).setRequestedOrientation(NORMAL_ORIENTATION);
         showSupportActionBar(getContext());
         VideoPlayer currJcvd = VideoPlayerManager.getCurrentJcvd();
-        currJcvd.textureViewContainer.removeView(MediaManager.textureView);
+        currJcvd.textureViewContainer.removeView(MyFragment2.textureView);
         ViewGroup vp = (ViewGroup) (JCUtils.scanForActivity(getContext()))//.getWindow().getDecorView();
                 .findViewById(Window.ID_ANDROID_CONTENT);
         vp.removeView(currJcvd);
@@ -321,8 +329,8 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         if (old != null) {
             vp.removeView(old);
         }
-        ((ViewGroup) MediaManager.textureView.getParent()).removeView(MediaManager.textureView);
-        textureViewContainer.removeView(MediaManager.textureView);
+        ((ViewGroup) MyFragment2.textureView.getParent()).removeView(MyFragment2.textureView);
+        textureViewContainer.removeView(MyFragment2.textureView);
         try {
             Constructor<VideoPlayer> constructor = (Constructor<VideoPlayer>) VideoPlayer.this.getClass().getConstructor(Context.class);
             VideoPlayer jcVideoPlayer = constructor.newInstance(getContext());
@@ -344,8 +352,8 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
 
     public void initTextureView() {
         removeTextureView();
-        MediaManager.textureView = new ResizeTextureView(getContext());
-        MediaManager.textureView.setSurfaceTextureListener(MediaManager.instance());
+        MyFragment2.textureView = new ResizeTextureView(getContext());
+        MyFragment2.textureView.setSurfaceTextureListener(mAccessMediaPlayer.getContextFragment());
     }
 
     public void addTextureView() {
@@ -355,13 +363,13 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         Gravity.CENTER);
-        textureViewContainer.addView(MediaManager.textureView, layoutParams);
+        textureViewContainer.addView(MyFragment2.textureView, layoutParams);
     }
 
     public void removeTextureView() {
-        MediaManager.savedSurfaceTexture = null;
-        if (MediaManager.textureView != null && MediaManager.textureView.getParent() != null) {
-            ((ViewGroup) MediaManager.textureView.getParent()).removeView(MediaManager.textureView);
+        MyFragment2.savedSurfaceTexture = null;
+        if (MyFragment2.textureView != null && MyFragment2.textureView.getParent() != null) {
+            ((ViewGroup) MyFragment2.textureView.getParent()).removeView(MyFragment2.textureView);
         }
     }
 
@@ -373,9 +381,9 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         AudioManager mAudioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
         mAudioManager.requestAudioFocus(onAudioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
         JCUtils.scanForActivity(getContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        MediaManager.CURRENT_PLAYING_URL = url;
-        MediaManager.CURRENT_PLING_LOOP = loop;
-        MediaManager.MAP_HEADER_DATA = headData;
+        CURRENT_PLAYING_URL = url;
+        CURRENT_PLING_LOOP = loop;
+        MAP_HEADER_DATA = headData;
         setUiWitStateAndScreen(CURRENT_STATE_PREPARING);
         VideoPlayerManager.setFirstFloor(this);
 
@@ -425,7 +433,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
             case CURRENT_STATE_NORMAL:
                 cancelProgressTimer();
                 if (isCurrentJcvd()) {
-                    MediaManager.instance().releaseMediaPlayer();
+                    mAccessMediaPlayer.getContextFragment().releaseMediaPlayer();
                 }
                 break;
             case CURRENT_STATE_PREPARING:
@@ -453,9 +461,9 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
 
     public int getDuration() {
         int duration = 0;
-        if (MediaManager.instance().mediaPlayer == null) return duration;
+        if (mAccessMediaPlayer.getMediaPlayer() == null) return duration;
         try {
-            duration = MediaManager.instance().mediaPlayer.getDuration();
+            duration = mAccessMediaPlayer.getMediaPlayer().getDuration();
         } catch (IllegalStateException e) {
             e.printStackTrace();
             return duration;
@@ -476,13 +484,14 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
 
     public int getCurrentPositionWhenPlaying() {
         int position = 0;
-        if (MediaManager.instance().mediaPlayer == null)
-            return position;//这行代码不应该在这，如果代码和逻辑万无一失的话，心头之恨呐
+        Log.i("",""+mAccessMediaPlayer);
+        if (mAccessMediaPlayer.getMediaPlayer() == null)
+            return position;
         if (currentState == CURRENT_STATE_PLAYING ||
                 currentState == CURRENT_STATE_PAUSE ||
                 currentState == CURRENT_STATE_PLAYING_BUFFERING_START) {
             try {
-                position = MediaManager.instance().mediaPlayer.getCurrentPosition();
+                position = mAccessMediaPlayer.getMediaPlayer().getCurrentPosition();
             } catch (IllegalStateException e) {
                 e.printStackTrace();
                 return position;
@@ -525,7 +534,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         if (currentState != CURRENT_STATE_PLAYING &&
                 currentState != CURRENT_STATE_PAUSE) return;
         int time = seekBar.getProgress() * getDuration() / 100;
-        MediaManager.instance().mediaPlayer.seekTo(time);
+        mAccessMediaPlayer.getMediaPlayer().seekTo(time);
         mediaPlaying = false;
         Log.i(TAG, "seekTo " + time + " [" + this.hashCode() + "] ");
     }
@@ -551,18 +560,18 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         }
         cancelProgressTimer();
         setUiWitStateAndScreen(CURRENT_STATE_NORMAL);
-        textureViewContainer.removeView(MediaManager.textureView);
-        MediaManager.instance().currentVideoWidth = 0;
-        MediaManager.instance().currentVideoHeight = 0;
+        textureViewContainer.removeView(MyFragment2.textureView);
+        mAccessMediaPlayer.getContextFragment().currentVideoWidth = 0;
+        mAccessMediaPlayer.getContextFragment().currentVideoHeight = 0;
 
         AudioManager mAudioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
         mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
         JCUtils.scanForActivity(getContext()).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         clearFullscreenLayout();
         JCUtils.getAppCompActivity(getContext()).setRequestedOrientation(NORMAL_ORIENTATION);
-        MediaManager.textureView = null;
-        MediaManager.savedSurfaceTexture = null;
-        MediaManager.mediaPlaying = false;
+        MyFragment2.textureView = null;
+        MyFragment2.savedSurfaceTexture = null;
+        MyFragment2.mediaPlaying = false;
     }
 
     @Override
@@ -572,9 +581,15 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
 
     public void onVideoSizeChanged() {
         Log.i(TAG, "onVideoSizeChanged " + " [" + this.hashCode() + "] ");
-        if (MediaManager.textureView != null) {
-            MediaManager.textureView.setVideoSize(MediaManager.instance().getVideoSize());
+        if (MyFragment2.textureView != null) {
+            MyFragment2.textureView.setVideoSize(mAccessMediaPlayer.getContextFragment().getVideoSize());
         }
+    }
+
+    public interface AccessMediaPlayer {
+        public MediaPlayer getMediaPlayer();
+        public MyFragment2 getContextFragment();
+
     }
 
     public class ProgressTimerTask extends TimerTask {

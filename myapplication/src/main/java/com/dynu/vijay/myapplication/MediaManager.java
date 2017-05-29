@@ -1,3 +1,4 @@
+/*
 package com.dynu.vijay.myapplication;
 
 import android.graphics.Point;
@@ -15,9 +16,11 @@ import android.view.TextureView;
 import java.lang.reflect.Method;
 import java.util.Map;
 
+*/
 /**
  * Created by Vijay on 5/27/2017.
- */
+ *//*
+
 
 public class MediaManager implements TextureView.SurfaceTextureListener, MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnBufferingUpdateListener, MediaPlayer.OnSeekCompleteListener, MediaPlayer.OnErrorListener, MediaPlayer.OnInfoListener, MediaPlayer.OnVideoSizeChangedListener {
 
@@ -212,3 +215,4 @@ public class MediaManager implements TextureView.SurfaceTextureListener, MediaPl
     }
 
 }
+*/

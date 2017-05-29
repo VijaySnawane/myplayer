@@ -1,9 +1,10 @@
 package com.dynu.vijay.myapplication;
 
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements VideoPlayer.AccessMediaPlayer {
 
     public static final String TAG = "";
     MyFragment2 mMyFragment;
@@ -32,4 +33,13 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public MediaPlayer getMediaPlayer() {
+        return mMyFragment.getMediaPlayer();
+    }
+
+    @Override
+    public MyFragment2 getContextFragment() {
+        return mMyFragment;
+    }
 }
