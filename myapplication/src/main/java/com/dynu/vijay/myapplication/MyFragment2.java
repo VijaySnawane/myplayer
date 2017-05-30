@@ -1,16 +1,15 @@
 package com.dynu.vijay.myapplication;
 
+import android.content.DialogInterface;
 import android.graphics.Point;
 import android.graphics.SurfaceTexture;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Looper;
-import android.os.Message;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v7.app.AlertDialog;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Surface;
@@ -21,14 +20,13 @@ import android.view.ViewGroup;
 import java.lang.reflect.Method;
 import java.util.Map;
 
+import static com.dynu.vijay.myapplication.VideoPlayer.CURRENT_STATE_AUTO_COMPLETE;
+import static com.dynu.vijay.myapplication.VideoPlayer.CURRENT_STATE_ERROR;
 import static com.dynu.vijay.myapplication.VideoPlayer.CURRENT_STATE_PAUSE;
 
-public class MyFragment2 extends Fragment implements  TextureView.SurfaceTextureListener, MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnBufferingUpdateListener, MediaPlayer.OnSeekCompleteListener, MediaPlayer.OnErrorListener, MediaPlayer.OnInfoListener, MediaPlayer.OnVideoSizeChangedListener {
+public class MyFragment2 extends Fragment implements TextureView.SurfaceTextureListener, MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnBufferingUpdateListener, MediaPlayer.OnSeekCompleteListener, MediaPlayer.OnErrorListener, MediaPlayer.OnInfoListener, MediaPlayer.OnVideoSizeChangedListener {
 
 
-    VideoPlayer jcVideoPlayerStandard;
-    public static final int HANDLER_PREPARE = 0;
-    public static final int HANDLER_RELEASE = 2;
     public static String TAG = "JieCaoVideoPlayer";
     public static SurfaceTexture savedSurfaceTexture;
     public static String CURRENT_PLAYING_URL;
@@ -39,8 +37,7 @@ public class MyFragment2 extends Fragment implements  TextureView.SurfaceTexture
     public MediaPlayer mediaPlayer = new MediaPlayer();
     public int currentVideoWidth = 0;
     public int currentVideoHeight = 0;
-    HandlerThread mMediaHandlerThread;
-    MediaHandler mMediaHandler;
+    VideoPlayer jcVideoPlayerStandard;
     Handler mainThreadHandler;
 
     public static MyFragment2 newInstance() {
@@ -51,9 +48,6 @@ public class MyFragment2 extends Fragment implements  TextureView.SurfaceTexture
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.my_fragment, container, false);
-        mMediaHandlerThread = new HandlerThread(TAG);
-        mMediaHandlerThread.start();
-        mMediaHandler = new MediaHandler((mMediaHandlerThread.getLooper()));
         mainThreadHandler = new Handler();
         jcVideoPlayerStandard = (VideoPlayer) view.findViewById(R.id.videoplayer);
         jcVideoPlayerStandard.setUp("https://view.vzaar.com/5822839/video"
@@ -98,51 +92,6 @@ public class MyFragment2 extends Fragment implements  TextureView.SurfaceTexture
         return mediaPlayer;
     }
 
-    public class MediaHandler extends Handler {
-        public MediaHandler(Looper looper) {
-            super(looper);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            switch (msg.what) {
-                case HANDLER_PREPARE:
-                    try {
-                        mediaPlaying = false;
-                        currentVideoWidth = 0;
-                        currentVideoHeight = 0;
-                        mediaPlayer.release();
-                        mediaPlayer = new MediaPlayer();
-                        mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                        Class<MediaPlayer> clazz = MediaPlayer.class;
-                        Method method = clazz.getDeclaredMethod("setDataSource", String.class, Map.class);
-                        method.invoke(mediaPlayer, CURRENT_PLAYING_URL, MAP_HEADER_DATA);
-                        mediaPlayer.setLooping(CURRENT_PLING_LOOP);
-                        mediaPlayer.setOnPreparedListener(MyFragment2.this);
-                        mediaPlayer.setOnCompletionListener(MyFragment2.this);
-                        mediaPlayer.setOnBufferingUpdateListener(MyFragment2.this);
-                        mediaPlayer.setScreenOnWhilePlaying(true);
-                        mediaPlayer.setOnSeekCompleteListener(MyFragment2.this);
-                        mediaPlayer.setOnErrorListener(MyFragment2.this);
-                        mediaPlayer.setOnInfoListener(MyFragment2.this);
-                        mediaPlayer.setOnVideoSizeChangedListener(MyFragment2.this);
-                        mediaPlayer.prepareAsync();
-                        mediaPlayer.setSurface(new Surface(savedSurfaceTexture));
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    break;
-                case HANDLER_RELEASE:
-                    if (mediaPlayer != null) {
-                        mediaPlayer.release();
-                        mediaPlaying = false;
-                    }
-                    break;
-            }
-        }
-    }
-
     @Override
     public void onPrepared(MediaPlayer mediaPlayer) {
         mediaPlayer.start();
@@ -158,15 +107,28 @@ public class MyFragment2 extends Fragment implements  TextureView.SurfaceTexture
         });
     }
 
-
     @Override
     public void onCompletion(MediaPlayer mediaPlayer) {
-        mediaPlaying = false;
+        mediaPlaying = true;
+        Runtime.getRuntime().gc();
+        jcVideoPlayerStandard.cancelProgressTimer();
+        jcVideoPlayerStandard.setUiWitStateAndScreen(CURRENT_STATE_AUTO_COMPLETE);
+        if (isFullScreen()) {
+            setHaifScreen();
+        }
+        jcVideoPlayerStandard.setPlayImage();
     }
 
     @Override
-    public void onBufferingUpdate(MediaPlayer mediaPlayer, int i) {
-
+    public void onBufferingUpdate(MediaPlayer mediaPlayer,final int bufferProgress) {
+        mainThreadHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (VideoPlayerManager.getCurrentJcvd() != null) {
+                    VideoPlayerManager.getCurrentJcvd().updateSeekProgress(bufferProgress);
+                }
+            }
+        });
     }
 
     @Override
@@ -183,8 +145,25 @@ public class MyFragment2 extends Fragment implements  TextureView.SurfaceTexture
     }
 
     @Override
-    public boolean onError(MediaPlayer mediaPlayer, int i, int i1) {
+    public boolean onError(MediaPlayer mediaPlayer, final int what, int i1) {
         mediaPlaying = false;
+        if (what != 38 && what != -38) {
+            showAlert();
+        }
+        mainThreadHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (VideoPlayerManager.getCurrentJcvd() != null) {
+                    if (what != 38 && what != -38) {
+                        jcVideoPlayerStandard.hideProgress();
+                        jcVideoPlayerStandard.setUiWitStateAndScreen(CURRENT_STATE_ERROR);
+                        if (VideoPlayerManager.getCurrentJcvd().isCurrentJcvd()) {
+                            releaseMediaPlayer();
+                        }
+                    }
+                }
+            }
+        });
         return false;
     }
 
@@ -229,17 +208,38 @@ public class MyFragment2 extends Fragment implements  TextureView.SurfaceTexture
 
     public void prepare() {
         releaseMediaPlayer();
-        Message msg = new Message();
-        msg.what = HANDLER_PREPARE;
-        mMediaHandler.sendMessage(msg);
+        try {
+            mediaPlaying = false;
+            currentVideoWidth = 0;
+            currentVideoHeight = 0;
+            mediaPlayer.release();
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+            Class<MediaPlayer> clazz = MediaPlayer.class;
+            Method method = clazz.getDeclaredMethod("setDataSource", String.class, Map.class);
+            method.invoke(mediaPlayer, CURRENT_PLAYING_URL, MAP_HEADER_DATA);
+            mediaPlayer.setLooping(CURRENT_PLING_LOOP);
+            mediaPlayer.setOnPreparedListener(MyFragment2.this);
+            mediaPlayer.setOnCompletionListener(MyFragment2.this);
+            mediaPlayer.setOnBufferingUpdateListener(MyFragment2.this);
+            mediaPlayer.setScreenOnWhilePlaying(true);
+            mediaPlayer.setOnSeekCompleteListener(MyFragment2.this);
+            mediaPlayer.setOnErrorListener(MyFragment2.this);
+            mediaPlayer.setOnInfoListener(MyFragment2.this);
+            mediaPlayer.setOnVideoSizeChangedListener(MyFragment2.this);
+            mediaPlayer.prepareAsync();
+            mediaPlayer.setSurface(new Surface(savedSurfaceTexture));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void releaseMediaPlayer() {
-        Message msg = new Message();
-        msg.what = HANDLER_RELEASE;
-        mMediaHandler.sendMessage(msg);
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+            mediaPlaying = false;
+        }
     }
-
 
     @Override
     public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int i, int i1) {
@@ -256,4 +256,27 @@ public class MyFragment2 extends Fragment implements  TextureView.SurfaceTexture
 
     }
 
+    public void showAlert() {
+        final AlertDialog alertDialog = new AlertDialog.Builder(getActivity()).create();
+
+        // Setting Dialog Title
+        alertDialog.setTitle("Alert Dialog");
+
+        // Setting Dialog Message
+        alertDialog.setMessage("Welcome to Android Application");
+
+        // Setting Icon to Dialog
+        alertDialog.setIcon(R.drawable.jc_error_pressed);
+
+        // Setting OK Button
+        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Ok", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                alertDialog.dismiss();
+            }
+        });
+
+        // Showing Alert Message
+        alertDialog.show();
+    }
 }

@@ -1,12 +1,16 @@
 package com.dynu.vijay.myapplication;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.ContextWrapper;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Handler;
-import android.support.v4.app.Fragment;
 import android.support.v7.app.ActionBar;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.view.ContextThemeWrapper;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -27,6 +31,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.lang.reflect.Constructor;
+import java.util.Formatter;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -58,6 +64,20 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     public static boolean TOOL_BAR_EXIST = true;
     public static int FULLSCREEN_ORIENTATION = ActivityInfo.SCREEN_ORIENTATION_SENSOR;
     public static int NORMAL_ORIENTATION = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+    protected static Timer UPDATE_PROGRESS_TIMER;
+    public AccessMediaPlayer mAccessMediaPlayer;
+    public ImageView startButton;
+    public SeekBar progressBar;
+    public ProgressBar progress;
+    public ImageView fullscreenButton;
+    public TextView currentTimeTextView, totalTimeTextView;
+    public ViewGroup textureViewContainer;
+    public ViewGroup bottomContainer;
+    public int currentState = -1;
+    public int currentScreen = -1;
+    public boolean loop = false;
+    public Map<String, String> headData;
+    public String url = "";
     public AudioManager.OnAudioFocusChangeListener onAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
         @Override
         public void onAudioFocusChange(int focusChange) {
@@ -85,20 +105,6 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
             }
         }
     };
-    protected static Timer UPDATE_PROGRESS_TIMER;
-    public AccessMediaPlayer mAccessMediaPlayer;
-    public ImageView startButton;
-    public SeekBar progressBar;
-    public ProgressBar progress;
-    public ImageView fullscreenButton;
-    public TextView currentTimeTextView, totalTimeTextView;
-    public ViewGroup textureViewContainer;
-    public ViewGroup bottomContainer;
-    public int currentState = -1;
-    public int currentScreen = -1;
-    public boolean loop = false;
-    public Map<String, String> headData;
-    public String url = "";
     public Object[] objects1 = null;
     protected int mScreenWidth;
     protected int mScreenHeight;
@@ -109,15 +115,50 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
 
     public VideoPlayer(Context context) {
         super(context);
-        mAccessMediaPlayer=(AccessMediaPlayer)context;
+        mAccessMediaPlayer = (AccessMediaPlayer) context;
         init(context);
     }
 
 
     public VideoPlayer(Context context, AttributeSet attrs) {
         super(context, attrs);
-        mAccessMediaPlayer=(AccessMediaPlayer)context;
+        mAccessMediaPlayer = (AccessMediaPlayer) context;
         init(context);
+    }
+
+    public static void saveProgress(Context context, String url, int progress) {
+        if (!VideoPlayer.SAVE_PROGRESS) return;
+        SharedPreferences spn = context.getSharedPreferences("JCVD_PROGRESS",
+                Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = spn.edit();
+        editor.putInt(url, progress);
+        editor.apply();
+    }
+
+    public static int getSavedProgress(Context context, String url) {
+        if (!VideoPlayer.SAVE_PROGRESS) return 0;
+        SharedPreferences spn;
+        spn = context.getSharedPreferences("JCVD_PROGRESS",
+                Context.MODE_PRIVATE);
+        return spn.getInt(url, 0);
+    }
+
+    /**
+     * if url == null, clear all progress
+     *
+     * @param context
+     * @param url     if url!=null clear this url progress
+     */
+    public static void clearSavedProgress(Context context, String url) {
+        if (TextUtils.isEmpty(url)) {
+            SharedPreferences spn = context.getSharedPreferences("JCVD_PROGRESS",
+                    Context.MODE_PRIVATE);
+            spn.edit().clear().apply();
+        } else {
+            SharedPreferences spn = context.getSharedPreferences("JCVD_PROGRESS",
+                    Context.MODE_PRIVATE);
+            spn.edit().putInt(url, 0).apply();
+        }
     }
 
     public void releaseAllVideos() {
@@ -157,30 +198,30 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         return false;
     }
 
-    public static void hideSupportActionBar(Context context) {
+    public void hideSupportActionBar(Context context) {
         if (ACTION_BAR_EXIST) {
-            ActionBar ab = JCUtils.getAppCompActivity(context).getSupportActionBar();
+            ActionBar ab = getAppCompActivity(context).getSupportActionBar();
             if (ab != null) {
                 ab.setShowHideAnimationEnabled(false);
                 ab.hide();
             }
         }
         if (TOOL_BAR_EXIST) {
-            JCUtils.getAppCompActivity(context).getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            getAppCompActivity(context).getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     WindowManager.LayoutParams.FLAG_FULLSCREEN);
         }
     }
 
-    public static void showSupportActionBar(Context context) {
+    public void showSupportActionBar(Context context) {
         if (ACTION_BAR_EXIST) {
-            ActionBar ab = JCUtils.getAppCompActivity(context).getSupportActionBar();
+            ActionBar ab = getAppCompActivity(context).getSupportActionBar();
             if (ab != null) {
                 ab.setShowHideAnimationEnabled(false);
                 ab.show();
             }
         }
         if (TOOL_BAR_EXIST) {
-            JCUtils.getAppCompActivity(context).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            getAppCompActivity(context).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         }
     }
 
@@ -215,9 +256,6 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         mHandler = new Handler();
     }
 
-    public void showWifiDialog() {
-    }
-
     @Override
     public void onClick(View v) {
         int i = v.getId();
@@ -227,10 +265,6 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
                 return;
             }
             if (currentState == CURRENT_STATE_NORMAL || currentState == CURRENT_STATE_ERROR) {
-                if (!url.startsWith("file") && !JCUtils.isWifiConnected(getContext())) {
-                    showWifiDialog();
-                    return;
-                }
                 prepareMediaPlayer();
                 setUiWitStateAndScreen(CURRENT_STATE_PLAYING);
             } else if (currentState == CURRENT_STATE_PLAYING) {
@@ -261,7 +295,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     }
 
     public void PauseMediaPlayer() {
-        if (mAccessMediaPlayer.getContextFragment()!= null && mAccessMediaPlayer.getMediaPlayer() != null) {
+        if (mAccessMediaPlayer.getContextFragment() != null && mAccessMediaPlayer.getMediaPlayer() != null) {
             mAccessMediaPlayer.getMediaPlayer().pause();
             setUiWitStateAndScreen(CURRENT_STATE_PAUSE);
             mediaPlaying = false;
@@ -278,11 +312,11 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     }
 
     public void clearFloatScreen() {
-        JCUtils.getAppCompActivity(getContext()).setRequestedOrientation(NORMAL_ORIENTATION);
+        getAppCompActivity(getContext()).setRequestedOrientation(NORMAL_ORIENTATION);
         showSupportActionBar(getContext());
         VideoPlayer currJcvd = VideoPlayerManager.getCurrentJcvd();
         currJcvd.textureViewContainer.removeView(MyFragment2.textureView);
-        ViewGroup vp = (ViewGroup) (JCUtils.scanForActivity(getContext()))//.getWindow().getDecorView();
+        ViewGroup vp = (ViewGroup) (scanForActivity(getContext()))//.getWindow().getDecorView();
                 .findViewById(Window.ID_ANDROID_CONTENT);
         vp.removeView(currJcvd);
         VideoPlayerManager.setSecondFloor(null);
@@ -302,28 +336,25 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         startProgressTimer();
     }
 
-
     public void showProgress() {
         progress.setVisibility(View.VISIBLE);
         progress.bringToFront();
         startButton.setEnabled(false);
-        //progressBar.setEnabled(false);
         fullscreenButton.setEnabled(false);
     }
 
     public void hideProgress() {
         progress.setVisibility(View.GONE);
         startButton.setEnabled(true);
-        //progressBar.setEnabled(true);
         fullscreenButton.setEnabled(true);
     }
 
     public void startWindowFullscreen() {
         Log.i(TAG, "startWindowFullscreen " + " [" + this.hashCode() + "] ");
         hideSupportActionBar(getContext());
-        JCUtils.getAppCompActivity(getContext()).setRequestedOrientation(FULLSCREEN_ORIENTATION);
+        getAppCompActivity(getContext()).setRequestedOrientation(FULLSCREEN_ORIENTATION);
 
-        ViewGroup vp = (ViewGroup) (JCUtils.scanForActivity(getContext()))//.getWindow().getDecorView();
+        ViewGroup vp = (ViewGroup) (scanForActivity(getContext()))//.getWindow().getDecorView();
                 .findViewById(Window.ID_ANDROID_CONTENT);
         View old = vp.findViewById(FULLSCREEN_ID);
         if (old != null) {
@@ -380,7 +411,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         addTextureView();
         AudioManager mAudioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
         mAudioManager.requestAudioFocus(onAudioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-        JCUtils.scanForActivity(getContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        scanForActivity(getContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         CURRENT_PLAYING_URL = url;
         CURRENT_PLING_LOOP = loop;
         MAP_HEADER_DATA = headData;
@@ -423,8 +454,8 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     public void resetProgressAndTime() {
         progressBar.setProgress(0);
         progressBar.setSecondaryProgress(0);
-        currentTimeTextView.setText(JCUtils.stringForTime(0));
-        totalTimeTextView.setText(JCUtils.stringForTime(0));
+        currentTimeTextView.setText(stringForTime(0));
+        totalTimeTextView.setText(stringForTime(0));
     }
 
     public void setUiWitStateAndScreen(int state) {
@@ -478,13 +509,13 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         if (!mTouchingProgressBar) {
             if (progress != 0) progressBar.setProgress(progress);
         }
-        if (position != 0) currentTimeTextView.setText(JCUtils.stringForTime(position));
-        totalTimeTextView.setText(JCUtils.stringForTime(duration));
+        if (position != 0) currentTimeTextView.setText(stringForTime(position));
+        totalTimeTextView.setText(stringForTime(duration));
     }
 
     public int getCurrentPositionWhenPlaying() {
         int position = 0;
-        Log.i("",""+mAccessMediaPlayer);
+        Log.i("", "" + mAccessMediaPlayer);
         if (mAccessMediaPlayer.getMediaPlayer() == null)
             return position;
         if (currentState == CURRENT_STATE_PLAYING ||
@@ -540,7 +571,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     }
 
     public void clearFullscreenLayout() {
-        ViewGroup vp = (ViewGroup) (JCUtils.scanForActivity(getContext()))//.getWindow().getDecorView();
+        ViewGroup vp = (ViewGroup) (scanForActivity(getContext()))//.getWindow().getDecorView();
                 .findViewById(Window.ID_ANDROID_CONTENT);
         View oldF = vp.findViewById(FULLSCREEN_ID);
         View oldT = vp.findViewById(TINY_ID);
@@ -556,7 +587,7 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
     public void onCompletion() {
         if (currentState == CURRENT_STATE_PLAYING || currentState == CURRENT_STATE_PAUSE) {
             int position = getCurrentPositionWhenPlaying();
-            JCUtils.saveProgress(getContext(), url, position);
+            saveProgress(getContext(), url, position);
         }
         cancelProgressTimer();
         setUiWitStateAndScreen(CURRENT_STATE_NORMAL);
@@ -566,9 +597,9 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
 
         AudioManager mAudioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
         mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
-        JCUtils.scanForActivity(getContext()).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        scanForActivity(getContext()).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         clearFullscreenLayout();
-        JCUtils.getAppCompActivity(getContext()).setRequestedOrientation(NORMAL_ORIENTATION);
+        getAppCompActivity(getContext()).setRequestedOrientation(NORMAL_ORIENTATION);
         MyFragment2.textureView = null;
         MyFragment2.savedSurfaceTexture = null;
         MyFragment2.mediaPlaying = false;
@@ -586,6 +617,51 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         }
     }
 
+    public void updateSeekProgress(int progress) {
+        if (progressBar != null) {
+            progressBar.setSecondaryProgress(progress);
+        }
+    }
+
+    public String stringForTime(int timeMs) {
+        if (timeMs <= 0 || timeMs >= 24 * 60 * 60 * 1000) {
+            return "00:00";
+        }
+        int totalSeconds = timeMs / 1000;
+        int seconds = totalSeconds % 60;
+        int minutes = (totalSeconds / 60) % 60;
+        int hours = totalSeconds / 3600;
+        StringBuilder stringBuilder = new StringBuilder();
+        Formatter mFormatter = new Formatter(stringBuilder, Locale.getDefault());
+        if (hours > 0) {
+            return mFormatter.format("%d:%02d:%02d", hours, minutes, seconds).toString();
+        } else {
+            return mFormatter.format("%02d:%02d", minutes, seconds).toString();
+        }
+    }
+
+    public Activity scanForActivity(Context context) {
+        if (context == null) return null;
+
+        if (context instanceof Activity) {
+            return (Activity) context;
+        } else if (context instanceof ContextWrapper) {
+            return scanForActivity(((ContextWrapper) context).getBaseContext());
+        }
+
+        return null;
+    }
+
+    public AppCompatActivity getAppCompActivity(Context context) {
+        if (context == null) return null;
+        if (context instanceof AppCompatActivity) {
+            return (AppCompatActivity) context;
+        } else if (context instanceof ContextThemeWrapper) {
+            return getAppCompActivity(((ContextThemeWrapper) context).getBaseContext());
+        }
+        return null;
+    }
+
     public interface AccessMediaPlayer {
         public MediaPlayer getMediaPlayer();
         public MyFragment2 getContextFragment();
@@ -596,7 +672,6 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
         @Override
         public void run() {
             if (currentState == CURRENT_STATE_PLAYING || currentState == CURRENT_STATE_PAUSE || currentState == CURRENT_STATE_PLAYING_BUFFERING_START) {
-//                Log.v(TAG, "onProgressUpdate " + position + "/" + duration + " [" + this.hashCode() + "] ");
                 mHandler.post(new Runnable() {
                     @Override
                     public void run() {
@@ -606,4 +681,5 @@ public class VideoPlayer extends FrameLayout implements View.OnClickListener, Se
             }
         }
     }
+
 }
